@@ -5,60 +5,48 @@ description: Set up the Agentic Dashboard. Generates a real-time visibility dash
 
 # Agentic Dashboard Bootstrap
 
-You are setting up a real-time visibility dashboard for agentic coding sessions. This skill contains everything you need to generate the entire application. There is no npm package or CLI -- you ARE the installer.
+Sets up the Agentic Dashboard at `~/.agentic-dashboard/`. This skill contains everything needed to generate the entire application. There is no npm package or CLI — you ARE the installer.
 
-**What the dashboard does:**
-- Observes running agents across Claude Code and Cursor (read-only, zero instrumentation)
-- Surfaces only items where agents are blocked and need human action
-- Active session detection via process checks and lockfiles
+## What it monitors
+
+| Path | Contents |
+|------|----------|
+| `~/.claude/teams/{name}/config.json` | Team membership, agent roles, models, working directories, prompts |
+| `~/.claude/teams/{name}/inboxes/{agent}.json` | Messages between agents |
+| `~/.claude/tasks/{team}/*.json` | Task lists with status, blocking info, activeForm labels |
+| `~/.claude/todos/*.json` | Solo session task lists |
+
+## What it does
+
+- Observes running Claude Code agents (read-only, zero instrumentation)
+- Surfaces items where agents are blocked and need human action
+- Active session detection via lockfiles and message recency
 - Workflow inference scanning project configs at startup to produce work items
-- Active/All filter tabs for non-attention sections
-- Side menu navigation with sections (Attention, Teams, Plans, Solo Sessions) based on detected tools
+- Active/All filter tabs for session sections
+- Side menu navigation with sections: Attention, Board, Teams, Solo Sessions
 - List-then-detail drill-down pattern
 - Dark theme, local-only, TypeScript + React
 
 ---
 
-## Step 1: Scan the Machine
-
-Detect which agentic tools are installed:
+## Step 1: Create Directory Structure
 
 ```bash
-ls ~/.claude/teams/ 2>/dev/null && echo "CLAUDE_TEAMS=true" || echo "CLAUDE_TEAMS=false"
-ls ~/.claude/tasks/ 2>/dev/null && echo "CLAUDE_TASKS=true" || echo "CLAUDE_TASKS=false"
-ls ~/.claude/todos/ 2>/dev/null && echo "CLAUDE_TODOS=true" || echo "CLAUDE_TODOS=false"
-ls ~/.cursor/plans/ 2>/dev/null && echo "CURSOR_PLANS=true" || echo "CURSOR_PLANS=false"
+mkdir -p ~/.agentic-dashboard/{server,adapters,ui/{components,hooks,styles}}
 ```
 
-Report what you found.
-
-## Step 2: Choose Install Location
-
-Ask the user:
-> Where should I install the dashboard?
-> A) `~/.agentic-dashboard/` (recommended)
-> B) Custom path
-
-Set `INSTALL_DIR` to the chosen path.
-
-## Step 3: Create Directory Structure
-
-```bash
-mkdir -p {INSTALL_DIR}/{server,adapters,ui/{components,hooks,styles}}
-```
-
-## Step 4: Generate All Files
+## Step 2: Generate All Files
 
 Write every file below using the Write tool. Copy code blocks **exactly**.
 
 ---
 
-### FILE: {INSTALL_DIR}/package.json
+### FILE: ~/.agentic-dashboard/package.json
 
 ```json
 {
   "name": "agentic-dashboard",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -71,12 +59,10 @@ Write every file below using the Write tool. Copy code blocks **exactly**.
   "dependencies": {
     "chokidar": "^4.0.0",
     "express": "^5.0.0",
-    "js-yaml": "^4.1.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -95,7 +81,7 @@ Write every file below using the Write tool. Copy code blocks **exactly**.
 
 ---
 
-### FILE: {INSTALL_DIR}/tsconfig.json
+### FILE: ~/.agentic-dashboard/tsconfig.json
 
 ```json
 {
@@ -120,7 +106,7 @@ Write every file below using the Write tool. Copy code blocks **exactly**.
 
 ---
 
-### FILE: {INSTALL_DIR}/vite.config.ts
+### FILE: ~/.agentic-dashboard/vite.config.ts
 
 ```typescript
 import { defineConfig } from "vite";
@@ -148,7 +134,7 @@ export default defineConfig({
 
 ---
 
-### FILE: {INSTALL_DIR}/server/types.ts
+### FILE: ~/.agentic-dashboard/server/types.ts
 
 ```typescript
 export interface DashboardState {
@@ -186,6 +172,8 @@ export interface Agent {
   model?: string;
   currentTask?: string;
   lastActivity: number;
+  cwd?: string;
+  prompt?: string;
 }
 
 export interface TaskItem {
@@ -193,6 +181,7 @@ export interface TaskItem {
   subject: string;
   status: string;
   description?: string;
+  activeForm?: string;
   owner?: string;
   blockedBy?: string[];
   blocks?: string[];
@@ -266,7 +255,7 @@ export type WsMessage =
 
 ---
 
-### FILE: {INSTALL_DIR}/adapters/types.ts
+### FILE: ~/.agentic-dashboard/adapters/types.ts
 
 ```typescript
 import type { Session } from "../server/types.js";
@@ -298,7 +287,7 @@ export interface ToolAdapter {
 
 ---
 
-### FILE: {INSTALL_DIR}/server/adapter-registry.ts
+### FILE: ~/.agentic-dashboard/server/adapter-registry.ts
 
 ```typescript
 import type { ToolAdapter, WorkspacePath } from "../adapters/types.js";
@@ -395,7 +384,7 @@ export class AdapterRegistry {
 
 ---
 
-### FILE: {INSTALL_DIR}/server/attention-engine.ts
+### FILE: ~/.agentic-dashboard/server/attention-engine.ts
 
 ```typescript
 import type {
@@ -464,7 +453,7 @@ export class AttentionEngine {
 
 ---
 
-### FILE: {INSTALL_DIR}/server/board-engine.ts
+### FILE: ~/.agentic-dashboard/server/board-engine.ts
 
 ```typescript
 import { execSync } from "node:child_process";
@@ -722,7 +711,7 @@ export class BoardEngine {
 
 ---
 
-### FILE: {INSTALL_DIR}/server/workflow-scanner.ts
+### FILE: ~/.agentic-dashboard/server/workflow-scanner.ts
 
 ```typescript
 import fs from "node:fs/promises";
@@ -991,9 +980,7 @@ export class WorkflowScanner {
 
 ---
 
-### FILE: {INSTALL_DIR}/server/index.ts
-
-**IMPORTANT:** This file must register the adapters that were detected in Step 1. Only import and register adapters for tools that exist on this machine.
+### FILE: ~/.agentic-dashboard/server/index.ts
 
 ```typescript
 import express from "express";
@@ -1007,9 +994,7 @@ import { AttentionEngine } from "./attention-engine.js";
 import { BoardEngine } from "./board-engine.js";
 import { WorkflowScanner } from "./workflow-scanner.js";
 import type { DashboardState, WsMessage } from "./types.js";
-// CONDITIONAL IMPORTS -- only include adapters for detected tools:
-// import { ClaudeCodeAdapter } from "../adapters/claude-code.js";
-// import { CursorAdapter } from "../adapters/cursor.js";
+import { ClaudeCodeAdapter } from "../adapters/claude-code.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT ?? "4200", 10);
@@ -1028,39 +1013,6 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/state", (_req, res) => { res.json(state); });
-
-interface SectionInfo {
-  id: string;
-  label: string;
-  sessionType: string | null;
-}
-
-const sections: SectionInfo[] = [
-  { id: "attention", label: "Attention", sessionType: null },
-  { id: "board", label: "Board", sessionType: null },
-  { id: "teams", label: "Teams", sessionType: "team" },
-  { id: "solo", label: "Solo Sessions", sessionType: "solo" },
-  { id: "plans", label: "Plans", sessionType: "plan" },
-];
-
-// Filter sections based on registered adapters
-const adapterNames = new Set<string>();
-const registeredSections: SectionInfo[] = [];
-
-function buildSections(): void {
-  registeredSections.length = 0;
-  registeredSections.push(sections[0]); // attention always present
-  registeredSections.push(sections[1]); // board always present
-  if (adapterNames.has("claude-code")) {
-    registeredSections.push(sections[2]); // teams
-    registeredSections.push(sections[3]); // solo
-  }
-  if (adapterNames.has("cursor")) {
-    registeredSections.push(sections[4]); // plans
-  }
-}
-
-app.get("/api/sections", (_req, res) => { res.json({ sections: registeredSections }); });
 
 app.get("/api/work-items", (req, res) => {
   const workspace = req.query.workspace as string | undefined;
@@ -1090,14 +1042,8 @@ const attention = new AttentionEngine();
 const board = new BoardEngine();
 const scanner = new WorkflowScanner();
 
-// CONDITIONAL REGISTRATION -- only register adapters for detected tools:
-// const claudeAdapter = new ClaudeCodeAdapter();
-// registry.registerAdapter(claudeAdapter);
-// adapterNames.add(claudeAdapter.name);
-// const cursorAdapter = new CursorAdapter();
-// registry.registerAdapter(cursorAdapter);
-// adapterNames.add(cursorAdapter.name);
-// buildSections();
+const claudeAdapter = new ClaudeCodeAdapter();
+registry.registerAdapter(claudeAdapter);
 
 registry.onStateChange((updatedState) => {
   state = { ...state, workspaces: updatedState.workspaces };
@@ -1131,13 +1077,9 @@ async function start(): Promise<void> {
 start().catch((err) => { console.error("Failed to start dashboard:", err); process.exit(1); });
 ```
 
-**When writing this file:** Uncomment the import and registration lines for each detected tool. For example, if both Claude Code and Cursor were detected, uncomment all lines. If only Claude Code, uncomment only the ClaudeCodeAdapter lines. Always call `buildSections()` after registering adapters.
-
 ---
 
-### FILE: {INSTALL_DIR}/adapters/claude-code.ts
-
-**Only generate this file if Claude Code was detected in Step 1.**
+### FILE: ~/.agentic-dashboard/adapters/claude-code.ts
 
 ```typescript
 import { watch } from "chokidar";
@@ -1214,6 +1156,7 @@ function parseAgent(member: RawMember): Agent {
   return {
     id: member.agentId, name: member.name, role: member.agentType,
     status: "unknown", model: member.model, lastActivity: member.joinedAt,
+    cwd: member.cwd, prompt: member.prompt,
   };
 }
 
@@ -1269,7 +1212,7 @@ async function scanTeamSession(teamName: string): Promise<Session> {
   const tasks: TaskItem[] = [];
   for (const file of taskFiles) {
     const raw = await readJsonSafe<RawTask>(path.join(tasksDir, file));
-    if (raw) tasks.push({ id: raw.id, subject: raw.subject, status: raw.status, description: raw.description, owner: raw.owner, blockedBy: raw.blockedBy, blocks: raw.blocks });
+    if (raw) tasks.push({ id: raw.id, subject: raw.subject, status: raw.status, description: raw.description, activeForm: raw.activeForm, owner: raw.owner, blockedBy: raw.blockedBy, blocks: raw.blocks });
   }
 
   const inboxDir = path.join(TEAMS_DIR, teamName, "inboxes");
@@ -1313,7 +1256,7 @@ async function scanTodoSession(fileName: string): Promise<Session | null> {
   const todos = await readJsonSafe<RawTask[]>(filePath);
   if (!todos || todos.length === 0) return null;
   const sessionId = fileName.replace(".json", "");
-  const tasks: TaskItem[] = todos.map((t) => ({ id: t.id, subject: t.subject, status: t.status, description: t.description, owner: t.owner, blockedBy: t.blockedBy, blocks: t.blocks }));
+  const tasks: TaskItem[] = todos.map((t) => ({ id: t.id, subject: t.subject, status: t.status, description: t.description, activeForm: t.activeForm, owner: t.owner, blockedBy: t.blockedBy, blocks: t.blocks }));
   const stat = await fs.stat(filePath);
   const isActive = await isSoloSessionActive(filePath);
   return { id: `claude-solo-${sessionId}`, name: sessionId, type: "solo", agents: [], tasks, messages: [], metadata: {}, lastActivity: stat.mtimeMs, isActive };
@@ -1449,125 +1392,7 @@ export class ClaudeCodeAdapter implements ToolAdapter {
 
 ---
 
-### FILE: {INSTALL_DIR}/adapters/cursor.ts
-
-**Only generate this file if Cursor was detected in Step 1.**
-
-```typescript
-import { watch } from "chokidar";
-import fs from "node:fs/promises";
-import path from "node:path";
-import os from "node:os";
-import yaml from "js-yaml";
-import type { ToolAdapter, WorkspacePath, Disposable } from "./types.js";
-import type { Session, TaskItem } from "../server/types.js";
-
-const CURSOR_DIR = path.join(os.homedir(), ".cursor");
-const PLANS_DIR = path.join(CURSOR_DIR, "plans");
-const ACTIVE_THRESHOLD_MS = 5 * 60 * 1000;
-
-interface PlanFrontmatter { name?: string; overview?: string; isProject?: boolean; todos?: PlanTodo[]; }
-interface PlanTodo { id: string; content: string; status: string; }
-
-function parsePlanFile(content: string): { frontmatter: PlanFrontmatter; body: string } {
-  const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!fmMatch) return { frontmatter: {}, body: content };
-  return { frontmatter: yaml.load(fmMatch[1]) as PlanFrontmatter, body: fmMatch[2] };
-}
-
-async function scanPlanSession(filePath: string): Promise<Session | null> {
-  try {
-    const content = await fs.readFile(filePath, "utf-8");
-    const { frontmatter, body } = parsePlanFile(content);
-    const fileName = path.basename(filePath, ".plan.md");
-    const tasks: TaskItem[] = (frontmatter.todos ?? []).map((todo) => ({ id: todo.id, subject: todo.content, status: todo.status }));
-    const stat = await fs.stat(filePath);
-    const isActive = (Date.now() - stat.mtimeMs) < ACTIVE_THRESHOLD_MS;
-    return {
-      id: `cursor-plan-${fileName}`, name: frontmatter.name ?? fileName, type: "plan",
-      agents: [], tasks, messages: [],
-      metadata: { overview: frontmatter.overview, isProject: frontmatter.isProject, bodyPreview: body.slice(0, 500) },
-      lastActivity: stat.mtimeMs, isActive,
-    };
-  } catch { return null; }
-}
-
-export class CursorAdapter implements ToolAdapter {
-  name = "cursor";
-
-  async detect(): Promise<WorkspacePath[]> {
-    const paths: WorkspacePath[] = [];
-    try {
-      await fs.access(PLANS_DIR);
-      const files = await fs.readdir(PLANS_DIR);
-      for (const file of files.filter((f) => f.endsWith(".plan.md"))) {
-        paths.push({ tool: this.name, workspace: file.replace(".plan.md", ""), path: path.join(PLANS_DIR, file) });
-      }
-    } catch {}
-    return paths;
-  }
-
-  async scan(wp: WorkspacePath): Promise<Session> {
-    const session = await scanPlanSession(wp.path);
-    return session ?? { id: `cursor-plan-${wp.workspace}`, name: wp.workspace, type: "plan", agents: [], tasks: [], messages: [], metadata: {}, lastActivity: 0, isActive: false };
-  }
-
-  watch(wp: WorkspacePath, onChange: (session: Session) => void): Disposable {
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const watcher = watch(wp.path, { ignoreInitial: true });
-    watcher.on("all", () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => { onChange(await this.scan(wp)); }, 300);
-    });
-    return { dispose() { if (debounceTimer) clearTimeout(debounceTimer); watcher.close(); } };
-  }
-
-  watchForNew(
-    onAdded: (wp: WorkspacePath) => void,
-    onRemoved: (wp: WorkspacePath) => void,
-  ): Disposable {
-    const knownPlans = new Set<string>();
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const plansWatcher = watch(PLANS_DIR, { ignoreInitial: true, depth: 0 });
-    plansWatcher.on("all", () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
-        const currentPlans = new Set<string>();
-        try {
-          const files = (await fs.readdir(PLANS_DIR)).filter((f) => f.endsWith(".plan.md"));
-          for (const file of files) {
-            currentPlans.add(file);
-            if (!knownPlans.has(file)) {
-              knownPlans.add(file);
-              onAdded({ tool: "cursor", workspace: file.replace(".plan.md", ""), path: path.join(PLANS_DIR, file) });
-            }
-          }
-        } catch {}
-        for (const file of knownPlans) {
-          if (!currentPlans.has(file)) {
-            knownPlans.delete(file);
-            onRemoved({ tool: "cursor", workspace: file.replace(".plan.md", ""), path: path.join(PLANS_DIR, file) });
-          }
-        }
-      }, 500);
-    });
-
-    // Seed known plans
-    fs.readdir(PLANS_DIR).then((files) => {
-      for (const file of files.filter((f) => f.endsWith(".plan.md"))) {
-        knownPlans.add(file);
-      }
-    }).catch(() => {});
-
-    return { dispose() { if (debounceTimer) clearTimeout(debounceTimer); plansWatcher.close(); } };
-  }
-}
-```
-
----
-
-### FILE: {INSTALL_DIR}/ui/index.html
+### FILE: ~/.agentic-dashboard/ui/index.html
 
 ```html
 <!doctype html>
@@ -1586,7 +1411,7 @@ export class CursorAdapter implements ToolAdapter {
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/main.tsx
+### FILE: ~/.agentic-dashboard/ui/main.tsx
 
 ```tsx
 import { StrictMode } from "react";
@@ -1603,7 +1428,7 @@ createRoot(document.getElementById("root")!).render(
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/styles/globals.css
+### FILE: ~/.agentic-dashboard/ui/styles/globals.css
 
 ```css
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1627,7 +1452,7 @@ body {
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/hooks/useWebSocket.ts
+### FILE: ~/.agentic-dashboard/ui/hooks/useWebSocket.ts
 
 ```typescript
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -1670,40 +1495,30 @@ export function useWebSocket(url: string) {
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/hooks/useSections.ts
+### FILE: ~/.agentic-dashboard/ui/hooks/useSections.ts
 
 ```typescript
-import { useEffect, useState } from "react";
-
 export interface SectionInfo {
   id: string;
   label: string;
   sessionType: string | null;
 }
 
+const sections: SectionInfo[] = [
+  { id: "attention", label: "Attention", sessionType: null },
+  { id: "board", label: "Board", sessionType: null },
+  { id: "teams", label: "Teams", sessionType: "team" },
+  { id: "solo", label: "Solo Sessions", sessionType: "solo" },
+];
+
 export function useSections() {
-  const [sections, setSections] = useState<SectionInfo[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/sections")
-      .then((res) => res.json())
-      .then((data: { sections: SectionInfo[] }) => {
-        setSections(data.sections);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-  }, []);
-
-  return { sections, loading };
+  return { sections, loading: false };
 }
 ```
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/App.tsx
+### FILE: ~/.agentic-dashboard/ui/App.tsx
 
 ```tsx
 import { useMemo, useState } from "react";
@@ -1721,7 +1536,6 @@ const WS_URL = `ws://${window.location.hostname}:4200`;
 
 const EMPTY_LABELS: Record<string, string> = {
   teams: "No active teams",
-  plans: "No Cursor plans found",
   solo: "No solo sessions",
 };
 
@@ -1860,7 +1674,7 @@ function computeBadgeCounts(state: DashboardState, sections: SectionInfo[]): Rec
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/components/SideMenu.tsx
+### FILE: ~/.agentic-dashboard/ui/components/SideMenu.tsx
 
 ```tsx
 import type { SectionInfo } from "../hooks/useSections.js";
@@ -1914,7 +1728,7 @@ export function SideMenu({ sections, activeSection, onSelect, badgeCounts }: Sid
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/components/ListView.tsx
+### FILE: ~/.agentic-dashboard/ui/components/ListView.tsx
 
 ```tsx
 import { useState } from "react";
@@ -2021,7 +1835,7 @@ function formatRelativeTime(timestamp: number): string {
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/components/DetailView.tsx
+### FILE: ~/.agentic-dashboard/ui/components/DetailView.tsx
 
 ```tsx
 import type { Session, WorkItem } from "../../server/types.js";
@@ -2057,7 +1871,7 @@ export function DetailView({ session, tool, onBack, workItems }: DetailViewProps
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/components/SessionPanel.tsx
+### FILE: ~/.agentic-dashboard/ui/components/SessionPanel.tsx
 
 ```tsx
 import { useState } from "react";
@@ -2103,6 +1917,21 @@ export function SessionPanel({ session, tool, workItems = [] }: { session: Sessi
   );
 }
 
+function AgentPrompt({ prompt }: { prompt: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const preview = prompt.length > 100 ? prompt.slice(0, 100) + "..." : prompt;
+  return (
+    <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4 }}>
+      <span>{expanded ? prompt : preview}</span>
+      {prompt.length > 100 && (
+        <button type="button" onClick={() => setExpanded(!expanded)} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 11, marginLeft: 4, padding: 0 }}>
+          {expanded ? "less" : "more"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function AgentList({ agents }: { agents: Agent[] }) {
   if (agents.length === 0) return <Empty label="No agents" />;
   return (
@@ -2110,7 +1939,13 @@ function AgentList({ agents }: { agents: Agent[] }) {
       {agents.map((agent) => (
         <div key={agent.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: "var(--surface)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
           <StatusDot status={agent.status} />
-          <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 500 }}>{agent.name}</div><div style={{ fontSize: 12, color: "var(--text-subtle)" }}>{agent.role}{agent.model ? ` \u00b7 ${agent.model}` : ""}</div>{agent.currentTask && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Working on: {agent.currentTask}</div>}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>{agent.name}</div>
+            <div style={{ fontSize: 12, color: "var(--text-subtle)" }}>{agent.role}{agent.model ? ` \u00b7 ${agent.model}` : ""}</div>
+            {agent.cwd && <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace", marginTop: 2 }}>{agent.cwd}</div>}
+            {agent.currentTask && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Working on: {agent.currentTask}</div>}
+            {agent.prompt && <AgentPrompt prompt={agent.prompt} />}
+          </div>
           <span style={{ fontSize: 12, color: "var(--text-subtle)" }}>{agent.status}</span>
         </div>
       ))}
@@ -2125,7 +1960,12 @@ function TaskList({ tasks }: { tasks: TaskItem[] }) {
       {tasks.map((task) => (
         <div key={task.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: "var(--radius-sm)" }}>
           <TaskStatusIcon status={task.status} />
-          <span style={{ fontSize: 13, flex: 1 }}>{task.subject}</span>
+          <div style={{ flex: 1 }}>
+            <span style={{ fontSize: 13 }}>{task.subject}</span>
+            {task.status === "in_progress" && task.activeForm && (
+              <div style={{ fontSize: 12, fontStyle: "italic", color: "var(--text-muted)" }}>{task.activeForm}</div>
+            )}
+          </div>
           {task.blockedBy?.length ? <span style={{ fontSize: 11, color: "var(--danger)" }}>blocked</span> : null}
           {task.owner && <span style={{ fontSize: 12, color: "var(--text-subtle)" }}>{task.owner}</span>}
         </div>
@@ -2169,7 +2009,7 @@ export function Empty({ label }: { label: string }) {
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/components/AttentionQueue.tsx
+### FILE: ~/.agentic-dashboard/ui/components/AttentionQueue.tsx
 
 ```tsx
 import { useState } from "react";
@@ -2224,7 +2064,7 @@ export function AttentionQueue({ items }: { items: AttentionItem[] }) {
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/components/RawDataFallback.tsx
+### FILE: ~/.agentic-dashboard/ui/components/RawDataFallback.tsx
 
 ```tsx
 import { useState } from "react";
@@ -2250,7 +2090,7 @@ export function RawDataFallback({ data, label }: { data: unknown; label?: string
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/components/WorkItemList.tsx
+### FILE: ~/.agentic-dashboard/ui/components/WorkItemList.tsx
 
 ```tsx
 import type { WorkItem, WorkItemStatus } from "../../server/types.js";
@@ -2316,7 +2156,7 @@ function formatRelativeTime(timestamp: number): string {
 
 ---
 
-### FILE: {INSTALL_DIR}/ui/components/BoardView.tsx
+### FILE: ~/.agentic-dashboard/ui/components/BoardView.tsx
 
 ```tsx
 import type { BoardCard, BoardStage, AttentionUrgency } from "../../server/types.js";
@@ -2477,25 +2317,25 @@ function AgeBadge({ stageEnteredAt }: { stageEnteredAt: number }) {
 
 ---
 
-## Step 5: Install Dependencies
+## Step 3: Install Dependencies
 
 ```bash
-cd {INSTALL_DIR} && npm install
+cd ~/.agentic-dashboard && npm install
 ```
 
-## Step 6: Verify
+## Step 4: Verify
 
 ```bash
-cd {INSTALL_DIR} && npx tsc --noEmit
+cd ~/.agentic-dashboard && npx tsc --noEmit
 ```
 
 Must pass with zero errors. If it fails, read the error and fix it.
 
-## Step 7: Generate Launch Skill
+## Step 5: Generate Launch Skill
 
-Ask the user where their skills directory is. Write this file there:
+Write this file to the user's skills directory:
 
-### FILE: {SKILLS_DIR}/dashboard-launch/SKILL.md
+### FILE: ~/.claude/skills/dashboard-launch/SKILL.md
 
 ````markdown
 ---
@@ -2507,7 +2347,7 @@ description: Launch the Agentic Dashboard. Trigger with "open the dashboard".
 
 1. Start the dev server:
    ```bash
-   cd {INSTALL_DIR} && npm run dev &
+   cd ~/.agentic-dashboard && npm run dev &
    ```
 2. Wait 3 seconds for server startup, then open:
    ```bash
@@ -2520,16 +2360,13 @@ description: Launch the Agentic Dashboard. Trigger with "open the dashboard".
    Should return `{"status":"ok",...}`.
 ````
 
-**Replace `{INSTALL_DIR}` with the actual install path.**
-
-## Step 8: Report
+## Step 6: Report
 
 ```
-Dashboard installed at: {INSTALL_DIR}
-Adapters: {list detected tools}
-Sections: {list sections based on detected tools}
-Launch skill: {SKILLS_DIR}/dashboard-launch/SKILL.md
+Dashboard installed at: ~/.agentic-dashboard/
+Adapter: Claude Code
+Sections: Attention, Board, Teams, Solo Sessions
 
 To launch: "open the dashboard"
-To reinstall: delete {INSTALL_DIR} and run this skill again
+To reinstall: delete ~/.agentic-dashboard/ and run this skill again
 ```
